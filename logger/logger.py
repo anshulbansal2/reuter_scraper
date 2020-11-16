@@ -66,7 +66,7 @@ Sample usage:
 
 
 class Logger(object):
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
     """
     Initialize Logger instance.

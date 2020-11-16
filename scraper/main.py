@@ -2,8 +2,11 @@ import sys
 import os
 sys.path.insert(0, '/reuter_scraper')
 import time
+import datetime
 import traceback
 import requests
+from decimal import Decimal
+import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -11,9 +14,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from logger.logger import Logger
 from logger.log_bucket import *
+from config import *
+from utils.util import *
+from utils.dynamo_utils import *
 
 logger = Logger(logger='ReuterScraper')
 
+reuter_stock_data_table = get_dynamo_resource(DYNAMO_TABLES['reuter_stock_data'])
 
 def get_logged_in_driver(user_id, pwd):
 	
@@ -65,7 +72,7 @@ def get_logged_in_driver(user_id, pwd):
 		ex_detail['traceback'] = tback
 		ex_detail['ExceptionMessage'] = str(e)
 		logger.error("Login failed for user {} with exception: {}".format(user_id,
-		ex_detail), bucket=REAUTER_SCRAPER.reuter_login)
+		str(ex_detail)), bucket=REAUTER_SCRAPER.reuter_login)
 		driver.quit()
 			
 	return driver
@@ -77,21 +84,48 @@ def fetch_ISIN():
 	return [line.rstrip('\n') for line in open(file_name)]
 
 	
-def get_recommendation_estimates(api_cookies, data):
-	recom_url = 'https://apac1.apps.cp.thomsonreuters.com/Apps/RecommendationTPApp/1.10.8/GetEstimateDetails'
-	res = requests.post(recom_url, cookies=api_cookies, data=data)
-	if res.status_code == 200:
-		logger.info("recommendation json: {}".format(res.text),
-		            bucket=REAUTER_SCRAPER.recommendation_estimates)
+def fetch_recommendation_estimates(api_cookies, data):
+	try:
+		url = REUTERS_API['GetEstimateDetails']
+		res = requests.post(url, cookies=api_cookies, data=data)
+		if res.status_code == 200:
+			return json.loads(res.text, parse_float=Decimal)
+			
+	except Exception as e:
+		error = {}
+		error['ExceptionMessage'] = str(e)
+		error['trace'] = traceback.format_exc().splitlines()
+		logger.error(message="Failed to fetch recommendation estimates for {}".format(
+			str(data)),
+			bucket=REAUTER_SCRAPER.recommendation_estimates,
+			stage='Estimates API Calling',
+			extra_message=str(error))
 
+
+def save_recommendation_estimates(api_cookies, isin_list):
+	
+	with reuter_stock_data_table.batch_writer(overwrite_by_pkeys=['isin', 'created_at']) as batch:
+		for data in isin_list:
+			
+			estimate_json = fetch_recommendation_estimates(api_cookies, data+'|true')
+			ct = int(time.time())
+			# etimate = {
+			# 	'isin': str(data),
+			# 	'created_at': ct,
+			# 	'estimate_json': estimate_json
+			# }
+			estimate_json['isin'] = data
+			estimate_json['created_at'] = ct
+			logger.debug("etimate json: {}".format(estimate_json),
+			             bucket=REAUTER_SCRAPER.recommendation_estimates,
+			             stage='Dynamo save estimates')
+			batch.put_item(Item=remove_empty_from_dict(estimate_json))
+	
 
 if __name__ == '__main__':
 	userid = sys.argv[1]
 	password = sys.argv[2]
-	# driver_path = sys.argv[3]
 	
-	logger.info("\n\n"+userid+"\n\n"+password, bucket=REAUTER_SCRAPER.master)
-
 	# Get loggedIn driver
 	logged_in_driver = get_logged_in_driver(userid, password)
 	
@@ -100,9 +134,7 @@ if __name__ == '__main__':
 	request_cookies = {c['name']: c['value'] for c in driver_cookies}
 	logger.info("request_cookies: {}".format(str(request_cookies)), bucket=REAUTER_SCRAPER.master)
 	
-	for isin in fetch_ISIN():
-		logger.info("\n\n Fetching recommendation for isin: {}".format(isin),
-		            bucket=REAUTER_SCRAPER.master)
-		get_recommendation_estimates(request_cookies, isin+'|true')
+	isin_list = fetch_ISIN()
 	
-
+	for chunk in get_chunks(isin_list, 500):
+		save_recommendation_estimates(request_cookies, chunk)

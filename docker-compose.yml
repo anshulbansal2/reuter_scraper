@@ -1,0 +1,11 @@
+version: '3'
+services:
+    reuter_scraper:
+        build:
+            dockerfile: Dockerfile
+            context: ./
+
+    dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - '8000:8000'
