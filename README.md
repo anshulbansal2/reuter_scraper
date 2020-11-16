@@ -1,9 +1,11 @@
-# raw
+# Thomson Reuters Site Scraper
 
-##Using Deployment script
+https://apac1.apps.cp.thomsonreuters.com
 
 
-Quick Run:
+
+
+### Quick Run:
 
     git clone git@github.com:anshulbansal2/reuter_scraper.git
     cd reuter_scraper
@@ -12,4 +14,7 @@ Quick Run:
      [pass user_id] [pass password]"
     
     
-     
+### APIs scraped:
+    GetEstimateDetails:
+        https://apac1.apps.cp.thomsonreuters.com/Apps/RecommendationTPApp/1.10.8/GetEstimateDetails'
+             
