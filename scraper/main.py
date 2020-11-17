@@ -1,5 +1,4 @@
 import sys
-import os
 sys.path.insert(0, '/reuter_scraper')
 import time
 import datetime
@@ -15,12 +14,15 @@ from selenium.webdriver.chrome.options import Options
 from logger.logger import Logger
 from logger.log_bucket import *
 from config import *
-from utils.util import *
 from utils.dynamo_utils import *
 
 logger = Logger(logger='ReuterScraper')
 
 reuter_stock_data_table = get_dynamo_resource(DYNAMO_TABLES['reuter_stock_data'])
+isin_counter = 0
+userid = ''
+password = ''
+
 
 def get_logged_in_driver(user_id, pwd):
 	
@@ -38,7 +40,7 @@ def get_logged_in_driver(user_id, pwd):
 	driver = webdriver.Chrome(options=options)
 
 	try:
-			
+		
 		driver.get("https://apac1.apps.cp.thomsonreuters.com")
 		userid = driver.find_element_by_name("IDToken1")
 		password = driver.find_element_by_name("IDToken2")
@@ -85,57 +87,88 @@ def fetch_ISIN():
 
 	
 def fetch_recommendation_estimates(api_cookies, data):
-	try:
-		url = REUTERS_API['GetEstimateDetails']
-		res = requests.post(url, cookies=api_cookies, data=data)
-		if res.status_code == 200:
-			logger.info(message="Fetch successful for {}".format(data),
-			            bucket=REAUTER_SCRAPER.recommendation_estimates,
-			            stage='Estimates API Calling')
-			return json.loads(res.text, parse_float=Decimal)
-			
-	except Exception as e:
-		error = {}
-		error['ExceptionMessage'] = str(e)
-		error['trace'] = traceback.format_exc().splitlines()
-		logger.error(message="Failed to fetch recommendation estimates for {}".format(
-			str(data)),
-			bucket=REAUTER_SCRAPER.recommendation_estimates,
-			stage='Estimates API Calling',
-			extra_message=str(error))
+	url = REUTERS_API['GetEstimateDetails']
+	res = requests.post(url, cookies=api_cookies, data=data)
+	return res
 
 
 def save_recommendation_estimates(api_cookies, isin_list):
-	
-	with reuter_stock_data_table.batch_writer(overwrite_by_pkeys=['isin', 'created_at']) as batch:
-		for data in isin_list:
-			logger.info(message="fetch and save for ISIN: {}".format(data),
-			            bucket=REAUTER_SCRAPER.recommendation_estimates,
-			            stage='Dynamo save estimates')
-			
-			estimate_json = fetch_recommendation_estimates(api_cookies, data+'|true')
-			ct = int(time.time())
-			estimate_json['isin'] = data
-			estimate_json['created_at'] = ct
-			logger.debug("etimate json: {}".format(estimate_json),
-			             bucket=REAUTER_SCRAPER.recommendation_estimates,
-			             stage='Dynamo save estimates')
-			batch.put_item(Item=remove_empty_from_dict(estimate_json))
-	
+	global isin_counter
+	for data in isin_list:
+		isin_counter +=1
+		logger.info(message="{}.Start fetch and save for ISIN: {}".format(isin_counter, data),
+		            bucket=REAUTER_SCRAPER.recommendation_estimates,
+		            stage='dynamo_save_estimates')
+		
+		try:
+			res = fetch_recommendation_estimates(api_cookies, data + '|true')
+			if res.status_code == 200:
+				estimate_json = json.loads(res.text, parse_float=Decimal)
+				if estimate_json and isinstance(estimate_json, dict):
+					ct = int(time.time())
+					estimate_json['isin'] = data
+					estimate_json['created_at'] = ct
+					logger.debug("etimate json: {}".format(estimate_json),
+				                bucket=REAUTER_SCRAPER.recommendation_estimates,
+				                stage='dynamo_save_estimates')
+					reuter_stock_data_table.put_item(Item=remove_empty_from_dict(estimate_json))
+					
+					logger.info(
+						message="Successfully saved estimates for ISIN: {}".format(data),
+						bucket=REAUTER_SCRAPER.recommendation_estimates,
+						stage='dynamo_save_estimates')
+				else:
+					logger.error(message="API with status code 200 returned error json: {} for "
+					                    "isin : {}".format(estimate_json, data),
+						bucket=REAUTER_SCRAPER.recommendation_estimates,
+						stage='estimates_api_calling')
+			else:
+				error_message = {}
+				error_message['status'] = res.status_code
+				error_message['error_reason'] = res.reason
+				logger.error(message=" fetch API call failed for isin : {}".format(
+					data), bucket=REAUTER_SCRAPER.recommendation_estimates,
+					stage='estimates_api_calling',
+					extra_message=str(error_message))
+				
+				if res.reason == 'Not Implemented':
+					logger.info("session expired, login again")
+					logged_in_driver = get_logged_in_driver(userid, password)
+				
+					# Get loggedIn cookies
+					driver_cookies = logged_in_driver.get_cookies()
+					request_cookies = {c['name']: c['value'] for c in driver_cookies}
+				
+					save_recommendation_estimates(request_cookies, isin_list[isin_counter - 1:])
+				else:
+					sys.exit(1)
+				
+		except Exception as e:
+			error = {}
+			error['ExceptionMessage'] = str(e)
+			error['trace'] = traceback.format_exc().splitlines()
+			logger.error(message="Failed to save recommendation estimate json for {}".format(
+				str(data)),
+				bucket=REAUTER_SCRAPER.recommendation_estimates,
+				stage='dynamo_save_estimates',
+				extra_message=str(error))
+			sys.exit(1)
 
+				
 if __name__ == '__main__':
 	userid = sys.argv[1]
 	password = sys.argv[2]
-	
-	# Get loggedIn driver
 	logged_in_driver = get_logged_in_driver(userid, password)
 	
 	# Get loggedIn cookies
 	driver_cookies = logged_in_driver.get_cookies()
 	request_cookies = {c['name']: c['value'] for c in driver_cookies}
 	logger.info("request_cookies: {}".format(str(request_cookies)), bucket=REAUTER_SCRAPER.master)
-	
+	logged_in_driver.quit()
+	# Fetch ISIN
 	isin_list = fetch_ISIN()
 	
-	for chunk in get_chunks(isin_list, 500):
-		save_recommendation_estimates(request_cookies, chunk)
+	# Save recommendation estimates to dynamodb
+	save_recommendation_estimates(request_cookies, isin_list)
+	
+	logger.info(message="reuter_scrapper job completed successfully")
