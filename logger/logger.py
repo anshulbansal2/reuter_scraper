@@ -73,7 +73,7 @@ class Logger(object):
 
     Args:
         log_type: A string for the label of the component generating logs,
-                  e.g. 'flight', 'bus', etc.
+                  e.g. 'reuter scraper', 'service 1', etc.
         logger: A string for the name of logger to use.
     """
     def __init__(self, log_type="", logger='INDMoneyLogs'):

@@ -89,6 +89,9 @@ def fetch_recommendation_estimates(api_cookies, data):
 		url = REUTERS_API['GetEstimateDetails']
 		res = requests.post(url, cookies=api_cookies, data=data)
 		if res.status_code == 200:
+			logger.info(message="Fetch successful for {}".format(data),
+			            bucket=REAUTER_SCRAPER.recommendation_estimates,
+			            stage='Estimates API Calling')
 			return json.loads(res.text, parse_float=Decimal)
 			
 	except Exception as e:
@@ -106,14 +109,12 @@ def save_recommendation_estimates(api_cookies, isin_list):
 	
 	with reuter_stock_data_table.batch_writer(overwrite_by_pkeys=['isin', 'created_at']) as batch:
 		for data in isin_list:
+			logger.info(message="fetch and save for ISIN: {}".format(data),
+			            bucket=REAUTER_SCRAPER.recommendation_estimates,
+			            stage='Dynamo save estimates')
 			
 			estimate_json = fetch_recommendation_estimates(api_cookies, data+'|true')
 			ct = int(time.time())
-			# etimate = {
-			# 	'isin': str(data),
-			# 	'created_at': ct,
-			# 	'estimate_json': estimate_json
-			# }
 			estimate_json['isin'] = data
 			estimate_json['created_at'] = ct
 			logger.debug("etimate json: {}".format(estimate_json),
