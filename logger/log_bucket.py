@@ -14,6 +14,7 @@ REAUTER_SCRAPER = enum(
     'reuter_scraper',
     master='master',
     ISIN_fetcher='ISIN_fetcher',
+    ISIN_producer='ISIN_producer',
     reuter_login='reuter_login',
     recommendation_estimates='recommendation_estimates'
 )

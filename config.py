@@ -1,7 +1,9 @@
 import os
 import os.path
 from datetime import timedelta
-ENV = "prod" #local
+
+# ENV = "prod" #local
+ENV = os.environ['ENV']
 
 # DYNAMO DB CONFIGS
 DYNAMO_CONFIGS = {
@@ -21,4 +23,16 @@ DYNAMO_TABLES = {
 
 REUTERS_API = {
     'GetEstimateDetails' : 'https://apac1.apps.cp.thomsonreuters.com/Apps/RecommendationTPApp/1.10.8/GetEstimateDetails'
+}
+
+
+QueueUrl= {
+    'local' : {
+        'url': 'http://localhost:9324/queue/default'
+    },
+    'prod': {
+     'queue_name': '',
+     'aws_account_id': ''
+    }
+    
 }
