@@ -11,10 +11,10 @@ https://apac1.apps.cp.thomsonreuters.com
     cd reuter_scraper
     docker build  -t reuter_scraper:latest -f Dockerfile .
     
-#### Run ISIN producer:
+#### Run reuters sqs producer:
     
     docker run -it --rm --name reuter_scraper --net='host' -e ENV=prod -t reuter_scraper:latest sh 
-    -c "python scraper/isin_producer.py"
+    -c "python scraper/reuters_sqs_producer.py"
     
 #### Run Scraper:
 
