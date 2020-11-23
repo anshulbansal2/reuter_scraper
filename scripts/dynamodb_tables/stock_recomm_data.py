@@ -16,10 +16,10 @@ def create_table():
 		                             aws_secret_access_key='dummy_secret_key',
 		                             verify=False)
 	table = dynamodb_resource.create_table(
-		TableName="reuter_stock_data",
+		TableName="stock_recomm_data",
 		KeySchema=[
 			{
-				'AttributeName': 'isin',
+				'AttributeName': 'id',
 				'KeyType': 'HASH'  # Partition key
 			},
 			{
@@ -29,7 +29,7 @@ def create_table():
 		],
 		AttributeDefinitions=[
 			{
-				'AttributeName': 'isin',
+				'AttributeName': 'id',
 				'AttributeType': 'S'
 			},
 			{

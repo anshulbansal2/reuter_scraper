@@ -33,6 +33,9 @@ https://apac1.apps.cp.thomsonreuters.com
     
         
 #### APIs scraped:
-    GetEstimateDetails:
-        https://apac1.apps.cp.thomsonreuters.com/Apps/RecommendationTPApp/1.10.8/GetEstimateDetails'
-             
+    Recommendations:
+        https://apac1.apps.cp.thomsonreuters.com/Apps/RecommendationTPApp/1.10.8/GetEstimateDetails
+    
+    Pricehistory:
+        https://apac1.apps.cp.thomsonreuters.com/TA/TAService.svc/json2/CalculateAllData
+                

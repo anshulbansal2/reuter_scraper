@@ -17,18 +17,34 @@ DYNAMO_CONFIGS = {
     }
 }
 
-DYNAMO_TABLES = {
-    'reuter_stock_data': 'reuter_stock_data'
-}
-
 REUTERS_API = {
-    'GetEstimateDetails' : 'https://apac1.apps.cp.thomsonreuters.com/Apps/RecommendationTPApp/1.10.8/GetEstimateDetails'
+    
+    'Recommendations' : {
+        'url': 'https://apac1.apps.cp.thomsonreuters.com/Apps/RecommendationTPApp/1'
+                           '.10.8/GetEstimateDetails',
+        
+        'post_data' : """%s|true""",
+        
+        'dynamodb_table' : 'stock_recomm_data'
+    },
+    
+    'Pricehistory': {
+        'url': 'https://apac1.apps.cp.thomsonreuters.com/TA/TAService.svc/json2'
+                     '/CalculateAllData',
+        
+        'post_data': """{"messages":[{"RequestInfos":[{
+	    "__type":"TSRequest:http://www.thomsonreuters.com/ns/2012/01/01/webservices/TAService_1/",
+	    "RIC": "%s", "Interval":4, "TradePeriod":"1", "ColumnMask":31, "TimeZone":"",
+	    "IntervalMultiplier":1, "RemoveGaps":true, "DateRange":3, "DateRangeMultiplier":5,
+	    "AdjustInterval":true}]}]}""",
+        
+        'dynamodb_table' : 'stock_pricing_history'
+    }
 }
-
 
 QueueUrl= {
     'local' : {
-        'url': 'http://localhost:9324/queue/default'
+        'url': 'http://localhost:9324/queue/test'
     },
     'prod': {
      'queue_name': '',

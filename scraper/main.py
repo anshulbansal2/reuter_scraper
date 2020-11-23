@@ -4,6 +4,7 @@ sys.path.insert(0, '/reuter_scraper')
 import time
 import datetime
 import traceback
+import ast
 import requests
 from decimal import Decimal
 import json
@@ -19,15 +20,19 @@ from utils.sqs_utils import *
 from utils.dynamo_utils import *
 from signal import SIGINT, SIGTERM, signal
 import boto3
+
 logger = Logger(logger='ReuterScraper')
 
 sqs = SQSClient('http://localhost:9324', 'us-east-1')
 
-# queue = sqs.get_queue_by_name(QueueName=os.environ["default"])
-reuter_stock_data_table = get_dynamo_resource(DYNAMO_TABLES['reuter_stock_data'])
+dynamo_tables = {}
+keys = REUTERS_API.keys()
+for k in keys:
+	dynamo_tables[k] = get_dynamo_resource(REUTERS_API[k]['dynamodb_table'])
 
 queue_url = QueueUrl[ENV]['url'] if ENV == 'local' else sqs.queue_url(QueueUrl[ENV]['queue_name'],
-                                                                      QueueUrl[ENV]['aws_account_id'])
+                                                                      QueueUrl[ENV][
+	                                                                      'aws_account_id'])
 
 # isin_counter = 0
 userid = ''
@@ -97,53 +102,60 @@ def get_logged_in_cookies(user_id, pwd):
 		driver.quit()
 
 
-def fetch_recommendation_estimates(api_cookies, data):
-	url = REUTERS_API['GetEstimateDetails']
-	res = requests.post(url, cookies=api_cookies, data=data)
-	return res
-
-
-def fetch_and_save_estimates(api_cookies, data):
-	logger.info(message="fetch and save estimates for ISIN: {}".format(data),
+def fetch_and_save(api_cookies, value):
+	logger.info(message="fetch and save started for value: {}".format(value, str(value)),
 	            bucket=REAUTER_SCRAPER.recommendation_estimates,
-	            stage='dynamo_save_estimates')
+	            stage='dynamo_save')
 	
-	res = fetch_recommendation_estimates(api_cookies, data + '|true')
+	headers = {
+		'content-type': 'application/json; charset=UTF-8'
+	}
 	
-	if res.status_code == 200:
-		estimate_json = json.loads(res.text, parse_float=Decimal)
-		if estimate_json and isinstance(estimate_json, dict):
-			ct = int(time.time())
-			estimate_json['isin'] = data
-			estimate_json['created_at'] = ct
-			logger.debug("etimate json: {}".format(str(estimate_json)),
-			             bucket=REAUTER_SCRAPER.recommendation_estimates,
-			             stage='dynamo_save_estimates')
-			reuter_stock_data_table.put_item(Item=remove_empty_from_dict(estimate_json))
-			
-			logger.info(
-				message="Successfully saved estimates for ISIN: {}".format(data),
-				bucket=REAUTER_SCRAPER.recommendation_estimates,
-				stage='dynamo_save_estimates')
+	data, apis = value
+	
+	for api in apis:
+		url = REUTERS_API[api]['url']
+		post_data = REUTERS_API[api]['post_data'] % data
+		table = dynamo_tables[api]
+		res = requests.post(url, headers=headers, cookies=api_cookies, data=post_data)
+		
+		if res.status_code == 200:
+			estimate_json = json.loads(res.text, parse_float=Decimal)
+			if estimate_json and (
+				isinstance(estimate_json, dict) or isinstance(estimate_json, list)):
+				estimate_json = estimate_json[0] if isinstance(estimate_json, list) else \
+					estimate_json
+				ct = int(time.time())
+				estimate_json['id'] = data
+				estimate_json['created_at'] = ct
+				logger.info("etimate json: {}".format(str(estimate_json)),
+				            bucket=REAUTER_SCRAPER.recommendation_estimates,
+				            stage='dynamo_save')
+				table.put_item(Item=remove_empty_from_dict(estimate_json))
+				
+				logger.info(
+					message="fetch and save completed for value: {}".format(data),
+					bucket=REAUTER_SCRAPER.recommendation_estimates,
+					stage='dynamo_save')
+			else:
+				logger.error(message="API with status code 200 returned error json: {} for "
+				                     "isin : {}".format(estimate_json, data),
+				             bucket=REAUTER_SCRAPER.recommendation_estimates,
+				             stage='api_calling')
+		
 		else:
-			logger.error(message="API with status code 200 returned error json: {} for "
-			                     "isin : {}".format(estimate_json, data),
-			             bucket=REAUTER_SCRAPER.recommendation_estimates,
-			             stage='estimates_api_calling')
-	
-	else:
-		error_message = {}
-		error_message['status'] = res.status_code
-		error_message['error_reason'] = res.reason
-		logger.error(message=" fetch API call failed for isin : {}".format(
-			data), bucket=REAUTER_SCRAPER.recommendation_estimates,
-			stage='estimates_api_calling',
-			extra_message=str(error_message))
-		
-		logger.info("session expired, getting loggedIn cookies again")
-		request_cookies = get_logged_in_cookies(userid, password)
-		
-		fetch_and_save_estimates(request_cookies, data)
+			error_message = {}
+			error_message['status'] = res.status_code
+			error_message['error_reason'] = res.reason
+			logger.error(message=" fetch API call failed for data : {}".format(
+				data), bucket=REAUTER_SCRAPER.recommendation_estimates,
+				stage='api_calling',
+				extra_message=str(error_message))
+			
+			logger.info("session expired, getting loggedIn cookies again")
+			request_cookies = get_logged_in_cookies(userid, password)
+			
+			fetch_and_save(request_cookies, data)
 
 
 class SignalHandler:
@@ -169,20 +181,20 @@ if __name__ == "__main__":
 		res = sqs.consume_messages(queue_url)
 		if 'Messages' in res.keys():
 			for message in res['Messages']:
-				isin = message['Body']
+				value = message['Body']
 				try:
-					fetch_and_save_estimates(request_cookies, isin)
+					fetch_and_save(request_cookies, ast.literal_eval(value))
 				except Exception as e:
 					error = {}
 					error['ExceptionMessage'] = str(e)
 					error['trace'] = traceback.format_exc().splitlines()
-					logger.error(message="Failed to save recommendation estimate json for {}".format(
-						isin),
+					logger.error(message="Exception occured for data {}".format(
+						value, str(value)),
 						bucket=REAUTER_SCRAPER.recommendation_estimates,
-						stage='dynamo_save_estimates',
+						stage='dynamo_save',
 						extra_message=str(error))
 					raise
-					
+				
 				receipt_handle = message['ReceiptHandle']
 				
 				# Delete received message from queue
