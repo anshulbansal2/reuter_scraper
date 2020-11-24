@@ -8,10 +8,8 @@ from data import data
 
 
 # Create SQS client
-sqs = SQSClient('http://localhost:9324', 'us-east-1')
-
-queue_url = QueueUrl[ENV]['url'] if ENV == 'local' else sqs.queue_url(QueueUrl[ENV]['queue_name'],
-                                                                      QueueUrl[ENV]['aws_account_id'])
+sqs = SQSClient(SQS_CONFIGS[ENV]['endpoint_url'], SQS_CONFIGS[ENV]['region_name'])
+queue_url = SQS_CONFIGS[ENV]['queueurl']
 
 
 if __name__ == "__main__":
