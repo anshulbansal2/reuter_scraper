@@ -20,11 +20,8 @@ class SQSClient:
 		session = boto3.session.Session()
 		
 		# # Initialise SQS client
-		if ENV == 'local':
-			self.sqs = session.client('sqs', endpoint_url=endpoint_url, region_name=region)
-		else:
-			self.sqs = session.client('sqs')
-			
+		self.sqs = session.client('sqs', endpoint_url=endpoint_url, region_name=region)
+		
 		print("SQSClient Initialised")
 
 	def consume_messages(self, queue_url):
@@ -92,7 +89,7 @@ class SQSClient:
 			logger.info(message="deleted message from sqs queue: {}".format(
 				queue_url),
 				bucket=REAUTER_SCRAPER.recommendation_estimates,
-				stage='dynamo_save_estimates')
+				stage='sqs_delete_message')
 		except Exception as e:
 			error = {}
 			error['ExceptionMessage'] = str(e)
@@ -100,7 +97,7 @@ class SQSClient:
 			logger.error(message="Failed to delete message for queue: {}".format(
 				str(queue_url)),
 				bucket=REAUTER_SCRAPER.recommendation_estimates,
-				stage='sql_delete_message',
+				stage='sqs_delete_message',
 				extra_message=str(error))
 			raise
 		

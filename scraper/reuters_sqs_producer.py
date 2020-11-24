@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, '/reuter_scraper')
 from config import *
 from utils.sqs_utils import *
-logger = Logger(logger='isin_producer')
+logger = Logger(logger='reuters_sqs_producer')
 from data import data
 
 

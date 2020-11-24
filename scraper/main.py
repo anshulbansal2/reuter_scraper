@@ -23,18 +23,15 @@ import boto3
 
 logger = Logger(logger='ReuterScraper')
 
-sqs = SQSClient('http://localhost:9324', 'us-east-1')
 
 dynamo_tables = {}
 keys = REUTERS_API.keys()
 for k in keys:
 	dynamo_tables[k] = get_dynamo_resource(REUTERS_API[k]['dynamodb_table'])
 
-queue_url = QueueUrl[ENV]['url'] if ENV == 'local' else sqs.queue_url(QueueUrl[ENV]['queue_name'],
-                                                                      QueueUrl[ENV][
-	                                                                      'aws_account_id'])
+sqs = SQSClient(SQS_CONFIGS[ENV]['endpoint_url'], SQS_CONFIGS[ENV]['region_name'])
+queue_url = SQS_CONFIGS[ENV]['queueurl']
 
-# isin_counter = 0
 userid = ''
 password = ''
 
@@ -128,7 +125,7 @@ def fetch_and_save(api_cookies, value):
 				ct = int(time.time())
 				estimate_json['id'] = data
 				estimate_json['created_at'] = ct
-				logger.info("etimate json: {}".format(str(estimate_json)),
+				logger.debug("etimate json: {}".format(str(estimate_json)),
 				            bucket=REAUTER_SCRAPER.recommendation_estimates,
 				            stage='dynamo_save')
 				table.put_item(Item=remove_empty_from_dict(estimate_json))

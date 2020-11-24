@@ -17,6 +17,21 @@ DYNAMO_CONFIGS = {
     }
 }
 
+SQS_CONFIGS = {
+    
+    'local': {
+        'region_name': 'us-east-1',
+        'endpoint_url': 'http://localhost:9324',
+        'queueurl': 'http://localhost:9324/queue/test'
+    },
+    
+    'prod': {
+        'region_name': 'ap-south-1',
+        'endpoint_url': 'https://sqs.ap-south-1.amazonaws.com',
+        'queueurl': ''
+    }
+}
+
 REUTERS_API = {
     
     'Recommendations' : {
@@ -42,13 +57,4 @@ REUTERS_API = {
     }
 }
 
-QueueUrl= {
-    'local' : {
-        'url': 'http://localhost:9324/queue/test'
-    },
-    'prod': {
-     'queue_name': '',
-     'aws_account_id': ''
-    }
-    
-}
+
