@@ -152,7 +152,7 @@ def fetch_and_save(api_cookies, value):
 			logger.info("session expired, getting loggedIn cookies again")
 			request_cookies = get_logged_in_cookies(userid, password)
 			
-			fetch_and_save(request_cookies, data)
+			fetch_and_save(request_cookies, value)
 
 
 class SignalHandler:
